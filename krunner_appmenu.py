@@ -20,6 +20,7 @@ import Xlib.display
 logger = logging.getLogger(__name__)
 
 
+DBUSMENU_IFACE = "com.canonical.dbusmenu"
 KRUNNER1_IFACE = "org.kde.krunner1"
 
 
@@ -141,6 +142,18 @@ class Runner(dbus.service.Object):
         self._window_info.thread.start()
         self._active_appmenu = (None, None)
         self._menu_entries = None
+        for signal_name in 'ItemsPropertiesUpdated', 'LayoutUpdated':
+            self.connection.add_signal_receiver(self._reset_appmenu,
+                                                dbus_interface=DBUSMENU_IFACE,
+                                                signal_name=signal_name,
+                                                member_keyword='signal',
+                                                sender_keyword='sender',
+                                                path_keyword='path')
+
+    def _reset_appmenu(self, *args, sender, path, signal):
+        if (sender, path) == self._active_appmenu:
+            logger.debug("resetting appmenu: %s", signal)
+            self._menu_entries = None
 
     def _get_dbusmenu_entries(self, dbusmenu, id_=0, props=None, children=None):
         if id_ == 0 or (props.get('children-display') and not children):
@@ -178,8 +191,7 @@ class Runner(dbus.service.Object):
 
         logger.debug("loading appmenu from %s %s", service, objpath)
         obj = self.connection.get_object(service, objpath)
-        # TODO: listen to signal and invalidate local menu data on changes.
-        dbusmenu = dbus.Interface(obj, 'com.canonical.dbusmenu')
+        dbusmenu = dbus.Interface(obj, DBUSMENU_IFACE)
         self._menu_entries = []
         for entry in self._get_dbusmenu_entries(dbusmenu):
             label = self._format_label(entry["label"])
@@ -263,19 +275,11 @@ class Runner(dbus.service.Object):
         score = 0
         for qword in query_words:
             word_score = 0
-            for lword in label_words:
+            for lword in chain(label_words, ancestor_labels_words):
                 ratio = _sequencematcher_ratio(None, lword, qword)
                 word_score = max(word_score, ratio)
                 if word_score == 1:
                     break
-            # Matches with words of ancestor labels get penalised so their
-            # maximum is 0.8.
-            if word_score < 0.8:
-                for lword in ancestor_labels_words:
-                    ratio = _sequencematcher_ratio(None, lword, qword)
-                    word_score = max(word_score, ratio - 0.2)
-                    if word_score >= 0.8:
-                        break
             if word_score < 0.7:
                 return
             score += word_score
@@ -287,6 +291,7 @@ class Runner(dbus.service.Object):
             type_ = self.QueryMatchType.PossibleMatch
         logger.debug("words query match %r %r/%r, score=%r",
                      query, ancestor_labels_words, label_words, score)
+        # Penalise this score in relation to that of whole query match.
         yield type_, score - 0.3
 
     @dbus.service.method(KRUNNER1_IFACE, out_signature='a(sss)')
@@ -325,7 +330,7 @@ class Runner(dbus.service.Object):
             service, objpath, ancestors, entry_id = matchId.split('|')
             ancestors = list(map(int, ancestors.split(',')))
             obj = self.connection.get_object(service, objpath)
-            dbusmenu = dbus.Interface(obj, 'com.canonical.dbusmenu')
+            dbusmenu = dbus.Interface(obj, DBUSMENU_IFACE)
             for ancestor in ancestors:
                 dbusmenu.Event(ancestor, "opened", "", 0)
             dbusmenu.Event(int(entry_id), "clicked", "", 0)
