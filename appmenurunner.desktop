@@ -1,0 +1,15 @@
+[Desktop Entry]
+Name=Application menu
+Comment=Application menu
+X-KDE-ServiceTypes=Plasma/Runner
+Type=Service
+Icon=internet-web-browser
+X-KDE-PluginInfo-Author=Artur Gaspar
+X-KDE-PluginInfo-Email=artur.gaspar.00@gmail.com
+X-KDE-PluginInfo-Name=appmenurunner
+X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-License=LGPL
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=DBus
+X-Plasma-DBusRunner-Service=org.krunner_appmenu
+X-Plasma-DBusRunner-Path=/krunner_appmenu
