@@ -159,15 +159,25 @@ class Runner(dbus.service.Object):
         if id_ == 0 or (props.get('children-display') and not children):
             if id_ != 0:
                 dbusmenu.AboutToShow(id_)
-            props_wanted = ["label", "icon-name", "children-display", "enabled"]
+            props_wanted = ["label", "icon-name", "children-display",
+                            "enabled", "shortcut"]
             rev, (id_, props, children) = dbusmenu.GetLayout(id_, -1,
                                                              props_wanted)
 
         entry = {
             "id": int(id_),
-            "label": str(props.get("label", "")),
-            "icon-name": str(props.get("icon-name", ""))
+            "label": str(props.get("label", ""))
         }
+
+        icon_name = props.get("icon-name")
+        if icon_name:
+            entry["icon_name"] = icon_name
+
+        shortcut = props.get("shortcut")
+        if shortcut:
+            entry["shortcut"] = '+'.join(key.upper() if len(key) == 1 else key
+                                         for key in shortcut[0])
+
         if not children and props.get('enabled', True) and entry["label"]:
             entry["ancestors"] = []
             yield entry
@@ -234,8 +244,15 @@ class Runner(dbus.service.Object):
         return ' '.join(re.sub(r'[^\w]', ' ', s).split())
 
     def _make_action(self, entry, type_, relevance):
-        return (entry["action_id"], entry["action_text"], entry["icon-name"],
-                type_.value, relevance, {})
+        properties = {}
+        if "shortcut" in entry:
+            properties["subtext"] = entry["shortcut"]
+        return (entry["action_id"],
+                entry["action_text"],
+                entry.get("icon_name", ""),
+                type_.value,
+                relevance,
+                properties)
 
     def _match(self, query):
         query = self._remove_special_chars(query.lower())
@@ -337,7 +354,7 @@ class Runner(dbus.service.Object):
             for ancestor in ancestors:
                 dbusmenu.Event(ancestor, "closed", "", 0)
         except Exception:
-            logger.exception("Error in Match()")
+            logger.exception("Error in Run()")
             raise
 
 
