@@ -1,0 +1,7 @@
+[Desktop Entry]
+Exec=/usr/bin/qdbus org.kde.krunner /App org.kde.krunner.App.displaySingleRunner appmenurunner
+Name=AppmenuRunner
+OnlyShowIn=KDE;
+Type=Application
+X-KDE-PluginInfo-Name=appmenurunner
+X-KDE-Shortcuts=Meta+M
