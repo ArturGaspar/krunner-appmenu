@@ -173,7 +173,7 @@ class Runner(dbus.service.Object):
             if id_ != 0:
                 dbusmenu.AboutToShow(id_)
             props_wanted = ["label", "icon-name", "children-display",
-                            "enabled", "shortcut"]
+                            "shortcut"]
             rev, (id_, props, children) = dbusmenu.GetLayout(id_, -1,
                                                              props_wanted)
         if ancestors is None:
@@ -186,7 +186,7 @@ class Runner(dbus.service.Object):
             for child in children:
                 yield from self._get_dbusmenu_entries(dbusmenu, *child,
                                                       ancestors)
-        elif props.get('enabled', True) and entry["label"]:
+        elif entry["label"]:
             entry["ancestors"] = ancestors
             yield entry
 
@@ -202,7 +202,7 @@ class Runner(dbus.service.Object):
             return
 
         logger.debug("loading appmenu from %s %s", service, objpath)
-        obj = self.connection.get_object(service, objpath)
+        obj = self.connection.get_object(service, objpath, introspect=False)
         dbusmenu = dbus.Interface(obj, DBUSMENU_IFACE)
 
         self._menu_entries = []
@@ -271,6 +271,38 @@ class Runner(dbus.service.Object):
             scores += score
         return scores / len(query_words)
 
+    def is_enabled(self, entry, cache=None):
+        if not entry["ancestors"]:
+            return True
+
+        id_ = entry["id"]
+        if cache is not None:
+            try:
+                return cache[id_]
+            except KeyError:
+                pass
+
+        obj = self.connection.get_object(*self._active_appmenu,
+                                         introspect=False)
+        dbusmenu = dbus.Interface(obj, DBUSMENU_IFACE)
+
+        parent_id = entry["ancestors"][-1]["id"]
+        props_wanted = ["enabled"]
+        dbusmenu.AboutToShow(parent_id)
+        siblings = dbusmenu.GetLayout(parent_id, -1, props_wanted)[1][2]
+
+        enabled = True
+        for s_id, props, children in siblings:
+            s_enabled = props.get("enabled", True)
+            if cache is not None:
+                cache[s_id] = s_enabled
+            if s_id == id_:
+                enabled = s_enabled
+                if cache is None:
+                    break
+
+        return enabled
+
     def match(self, query):
         if not self._menu_entries:
             logger.debug("appmenu not available")
@@ -279,6 +311,7 @@ class Runner(dbus.service.Object):
         query = self._prepare_match_text(query)
         query_words = query.split()
 
+        enabled_cache = {}
         for entry in self._menu_entries:
             md = entry["match_data"]
             score = self._match_words(query_words, md["words"])
@@ -289,7 +322,9 @@ class Runner(dbus.service.Object):
                     type_ = self.QueryMatchType.ExactMatch
                 else:
                     type_ = self.QueryMatchType.PossibleMatch
-                yield self._make_action(entry, type_, score)
+
+                if self.is_enabled(entry, enabled_cache):
+                    yield self._make_action(entry, type_, score)
 
     @dbus.service.method(KRUNNER1_IFACE, out_signature='a(sss)')
     def Actions(self, msg):
@@ -323,13 +358,14 @@ class Runner(dbus.service.Object):
         try:
             service, objpath, ancestors, entry_id = matchId.split('|')
             ancestors = list(map(int, ancestors.split(',')))
-            obj = self.connection.get_object(service, objpath)
+            obj = self.connection.get_object(service, objpath, introspect=False)
             dbusmenu = dbus.Interface(obj, DBUSMENU_IFACE)
             # for ancestor in ancestors:
             #     dbusmenu.Event(ancestor, "opened", "", 0)
             # for ancestor in ancestors[::-1]:
             #     dbusmenu.Event(ancestor, "closed", "", 0)
-            dbusmenu.Event(int(entry_id), "clicked", "", 0)
+            dbusmenu.Event(int(entry_id), "clicked", "", 0,
+                           signature='isvu')
         except Exception:
             logger.exception("Error in Run()")
             raise
