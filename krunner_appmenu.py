@@ -254,26 +254,22 @@ class Runner(dbus.service.Object):
 
     @staticmethod
     def _match_words(query_words, label_words):
-        qword_scores = 0
+        scores = 0
         for qword in query_words:
-            qword_score = 0
+            score = 0
             for lword in label_words:
                 if qword in lword:
-                    new_qword_score = len(qword) / len(lword)
-                elif lword in qword:
-                    new_qword_score = len(lword) / len(qword)
-                else:
-                    continue
-                qword_score = max(qword_score, new_qword_score)
-                if qword_score == 1:
-                    break
+                    new_score = len(qword) / len(lword)
+                    score = max(score, new_score)
+                    if score == 1:
+                        break
             # If a query word fails to match any label words, give this match a
             # final score 0.
-            if qword_score == 0:
+            if score == 0:
                 return 0
 
-            qword_scores += qword_score
-        return qword_scores / len(query_words)
+            scores += score
+        return scores / len(query_words)
 
     def match(self, query):
         if not self._menu_entries:
