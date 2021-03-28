@@ -13,3 +13,4 @@ X-KDE-PluginInfo-EnabledByDefault=true
 X-Plasma-API=DBus
 X-Plasma-DBusRunner-Service=org.krunner_appmenu
 X-Plasma-DBusRunner-Path=/krunner_appmenu
+X-Plasma-Runner-Min-Letter-Count=3
